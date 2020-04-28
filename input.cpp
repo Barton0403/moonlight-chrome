@@ -6,7 +6,15 @@
 
 #include <Limelight.h>
 
+#include <math.h>
+
 #define KEY_PREFIX 0x80
+
+#define TOUCH_DEAD_ZONE_DELAY 0.250
+#define TOUCH_DEAD_ZONE_RADIUS 50
+
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 static int ConvertPPButtonToLiButton(PP_InputEvent_MouseButton ppButton) {
     switch (ppButton) {
@@ -210,7 +218,7 @@ bool MoonlightInstance::HandleInputEvent(const pp::InputEvent& event) {
             return true;
         }
         
-         case PP_INPUTEVENT_TYPE_KEYUP: {
+        case PP_INPUTEVENT_TYPE_KEYUP: {
             if (!m_MouseLocked) {
                 return false;
             }
@@ -228,6 +236,47 @@ bool MoonlightInstance::HandleInputEvent(const pp::InputEvent& event) {
             
             LiSendKeyboardEvent(KEY_PREFIX << 8 | keyCode,
                                 KEY_ACTION_UP, modifiers);
+            return true;
+        }
+
+        case PP_INPUTEVENT_TYPE_TOUCHMOVE:
+        case PP_INPUTEVENT_TYPE_TOUCHSTART: {
+            pp::TouchInputEvent touchEvent(event);
+
+            pp::FloatPoint touchPoint = touchEvent.GetTouchByIndex(PP_TOUCHLIST_TYPE_TARGETTOUCHES, 0).position();
+
+            // Create a small deadzone for touch downs to allow more precise double-clicks
+            if (event.GetType() == PP_INPUTEVENT_TYPE_TOUCHMOVE ||
+                event.GetTimeStamp() - m_LastTouchUpTime > TOUCH_DEAD_ZONE_DELAY ||
+                sqrt(pow(m_LastTouchUpPoint.x() - touchPoint.x(), 2) +
+                     pow(m_LastTouchUpPoint.y() - touchPoint.y(), 2)) > TOUCH_DEAD_ZONE_RADIUS) {
+                // Scale the touch coordinates to the video rect
+                //
+                // For some reason, the x coordinate is already relative to the plugin rect,
+                // while the y coordinate is not. No clue why that is the case but oh well...
+                short x = MIN(MAX(touchPoint.x(), 0), m_PluginRect.width());
+                short y = MIN(MAX(touchPoint.y() - m_PluginRect.y(), 0), m_PluginRect.height());
+
+                // Update the mouse position prior to sending the button down
+                LiSendMousePositionEvent(x, y, m_PluginRect.width(), m_PluginRect.height());
+            }
+
+            if (event.GetType() == PP_INPUTEVENT_TYPE_TOUCHSTART &&
+                    touchEvent.GetTouchCount(PP_TOUCHLIST_TYPE_TARGETTOUCHES) == 1) {
+                LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_LEFT);
+            }
+            return true;
+        }
+
+        case PP_INPUTEVENT_TYPE_TOUCHCANCEL:
+        case PP_INPUTEVENT_TYPE_TOUCHEND: {
+            pp::TouchInputEvent touchEvent(event);
+
+            if (touchEvent.GetTouchCount(PP_TOUCHLIST_TYPE_TARGETTOUCHES) == 1) {
+                LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT);
+                m_LastTouchUpTime = event.GetTimeStamp();
+                m_LastTouchUpPoint = touchEvent.GetTouchByIndex(PP_TOUCHLIST_TYPE_TARGETTOUCHES, 0).position();
+            }
             return true;
         }
         

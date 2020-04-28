@@ -66,6 +66,7 @@ class MoonlightInstance : public pp::Instance, public pp::MouseLock {
             m_AccumulatedTicks(0),
             m_MouseDeltaX(0),
             m_MouseDeltaY(0),
+            m_LastTouchUpTime(0),
             m_HttpThreadPoolSequence(0) {
             // This function MUST be used otherwise sockets don't work (nacl_io_init() doesn't work!)            
             nacl_io_init_ppapi(pp_instance(), pp::Module::Get()->get_browser_interface());
@@ -143,6 +144,7 @@ class MoonlightInstance : public pp::Instance, public pp::MouseLock {
         void PaintPicture(void);
         bool InitializeRenderingSurface(int width, int height);
         void DidChangeFocus(bool got_focus);
+        void DidChangeView(const pp::View& view);
         
         static int VidDecSetup(int videoFormat, int width, int height, int redrawRate, void* context, int drFlags);
         static void VidDecCleanup(void);
@@ -184,6 +186,8 @@ class MoonlightInstance : public pp::Instance, public pp::MouseLock {
         PP_VideoPicture m_CurrentPicture;
         bool m_IsPainting;
         bool m_RequestIdrFrame;
+
+        pp::Rect m_PluginRect;
     
         OpusMSDecoder* m_OpusDecoder;
         pp::Audio m_AudioPlayer;
@@ -195,6 +199,8 @@ class MoonlightInstance : public pp::Instance, public pp::MouseLock {
         bool m_WaitingForAllModifiersUp;
         float m_AccumulatedTicks;
         int32_t m_MouseDeltaX, m_MouseDeltaY;
+        PP_TimeTicks m_LastTouchUpTime;
+        pp::FloatPoint m_LastTouchUpPoint;
     
         pp::SimpleThread* m_HttpThreadPool[HTTP_HANDLER_THREADS];
         uint32_t m_HttpThreadPoolSequence;
